@@ -37,11 +37,16 @@ TEST(AuthTest, 03_RegisterDuplicateUserFails) {
     std::remove("test_users.txt");
 }
 
-TEST(AuthTest, 04_RegisterEmptyCredentialsFails) {
+TEST(AuthTest, 04_RegisterInvalidPasswordLengthOrSpacesFails) {
     std::remove("test_users.txt");
     AuthManager auth("test_users.txt");
     EXPECT_FALSE(auth.registerUser("", "pass123", "USER"));
     EXPECT_FALSE(auth.registerUser("user1", "", "USER"));
+    EXPECT_FALSE(auth.registerUser("user1", "1234", "USER"));       // < 5 chars
+    EXPECT_FALSE(auth.registerUser("user1", "123456789", "USER"));  // > 8 chars
+    EXPECT_FALSE(auth.registerUser("user1", "pa ss1", "USER"));     // contains space
+    EXPECT_TRUE(auth.registerUser("user1", "12345", "USER"));       // exact 5 chars
+    EXPECT_TRUE(auth.registerUser("user2", "12345678", "USER"));    // exact 8 chars
     std::remove("test_users.txt");
 }
 
@@ -56,25 +61,25 @@ TEST(AuthTest, 05_RegisterInvalidRoleFails) {
 TEST(AuthTest, 06_RegisterAdminWithoutSecretKeyFails) {
     std::remove("test_users.txt");
     AuthManager auth("test_users.txt");
-    EXPECT_FALSE(auth.registerUser("admin1", "adminpass", "ADMIN"));
-    EXPECT_FALSE(auth.registerUser("admin1", "adminpass", "ADMIN", "WRONG_KEY"));
+    EXPECT_FALSE(auth.registerUser("admin1", "admin123", "ADMIN"));
+    EXPECT_FALSE(auth.registerUser("admin1", "admin123", "ADMIN", "WRONG_KEY"));
     std::remove("test_users.txt");
 }
 
 TEST(AuthTest, 07_RegisterAdminWithValidSecretKey) {
     std::remove("test_users.txt");
     AuthManager auth("test_users.txt");
-    EXPECT_TRUE(auth.registerUser("admin1", "adminpass", "ADMIN", "HCL@2026"));
+    EXPECT_TRUE(auth.registerUser("admin1", "admin123", "ADMIN", "HCL@2026"));
     std::remove("test_users.txt");
 }
 
 TEST(AuthTest, 08_LoginSuccessAndPasswordDecryption) {
     std::remove("test_users.txt");
     AuthManager auth("test_users.txt");
-    auth.registerUser("admin1", "Secret@99", "ADMIN", "HCL@2026");
+    auth.registerUser("admin1", "Sec@99", "ADMIN", "HCL@2026");
 
     std::string role;
-    EXPECT_TRUE(auth.loginUser("admin1", "Secret@99", role));
+    EXPECT_TRUE(auth.loginUser("admin1", "Sec@99", role));
     EXPECT_EQ(role, "ADMIN");
     std::remove("test_users.txt");
 }
@@ -82,10 +87,10 @@ TEST(AuthTest, 08_LoginSuccessAndPasswordDecryption) {
 TEST(AuthTest, 09_LoginWrongPasswordFails) {
     std::remove("test_users.txt");
     AuthManager auth("test_users.txt");
-    auth.registerUser("user1", "RightPass", "USER");
+    auth.registerUser("user1", "Right1", "USER");
 
     std::string role;
-    EXPECT_FALSE(auth.loginUser("user1", "WrongPass", role));
+    EXPECT_FALSE(auth.loginUser("user1", "Wrong1", role));
     std::remove("test_users.txt");
 }
 
@@ -93,7 +98,7 @@ TEST(AuthTest, 10_LoginUnknownUserFails) {
     std::remove("test_users.txt");
     AuthManager auth("test_users.txt");
     std::string role;
-    EXPECT_FALSE(auth.loginUser("ghost", "1234", role));
+    EXPECT_FALSE(auth.loginUser("ghost", "12345", role));
     std::remove("test_users.txt");
 }
 
@@ -113,8 +118,8 @@ TEST(AuthTest, 11_PersistenceReloadFromFile) {
 TEST(AuthTest, 12_RemoveUserSuccessAndGuards) {
     std::remove("test_users.txt");
     AuthManager auth("test_users.txt");
-    auth.registerUser("admin1", "pass1", "ADMIN", "HCL@2026");
-    auth.registerUser("user1", "pass2", "USER");
+    auth.registerUser("admin1", "pass12", "ADMIN", "HCL@2026");
+    auth.registerUser("user1", "pass23", "USER");
 
     EXPECT_FALSE(auth.removeUser("", "admin1"));
     EXPECT_FALSE(auth.removeUser("admin1", "admin1"));
@@ -122,7 +127,7 @@ TEST(AuthTest, 12_RemoveUserSuccessAndGuards) {
     EXPECT_TRUE(auth.removeUser("user1", "admin1"));
 
     std::string role;
-    EXPECT_FALSE(auth.loginUser("user1", "pass2", role));
+    EXPECT_FALSE(auth.loginUser("user1", "pass23", role));
     std::remove("test_users.txt");
 }
 
