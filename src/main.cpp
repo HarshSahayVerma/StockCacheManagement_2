@@ -4,6 +4,13 @@
 #include "Auth.h"
 #include "StockCache.h"
 
+#ifdef _WIN32
+#include <conio.h>
+#else
+#include <termios.h>
+#include <unistd.h>
+#endif
+
 static void clearInput() {
     std::cin.clear();
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
@@ -16,6 +23,59 @@ static bool readNoSpaceInput(const std::string& prompt, std::string& outStr) {
         return false;
     }
     return true;
+}
+
+// Cross-platform masked password input showing '*' for each typed character
+static std::string readMaskedPassword(const std::string& prompt) {
+    std::cout << prompt;
+    std::cout.flush();
+    std::string pass;
+
+#ifdef _WIN32
+    while (true) {
+        int ch = _getch();
+        if (ch == '\r' || ch == '\n') {
+            std::cout << '\n';
+            break;
+        }
+        if (ch == '\b' || ch == 127) {
+            if (!pass.empty()) {
+                pass.pop_back();
+                std::cout << "\b \b";
+            }
+        } else if (ch >= 32 && ch <= 126) {
+            pass.push_back(static_cast<char>(ch));
+            std::cout << '*';
+        }
+    }
+#else
+    termios oldt{};
+    tcgetattr(STDIN_FILENO, &oldt);
+    termios newt = oldt;
+    newt.c_lflag &= ~static_cast<tcflag_t>(ECHO | ICANON);
+    tcsetattr(STDIN_FILENO, TCSANOW, &newt);
+
+    char ch = '\0';
+    while (read(STDIN_FILENO, &ch, 1) == 1) {
+        if (ch == '\n' || ch == '\r') {
+            std::cout << '\n';
+            break;
+        }
+        if (ch == 127 || ch == '\b') {
+            if (!pass.empty()) {
+                pass.pop_back();
+                std::cout << "\b \b";
+                std::cout.flush();
+            }
+        } else if (ch >= 32 && ch <= 126) {
+            pass.push_back(ch);
+            std::cout << '*';
+            std::cout.flush();
+        }
+    }
+    tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
+#endif
+    return pass;
 }
 
 static void runAdminMenu(StockCache& cache, AuthManager& auth, const std::string& currentAdmin) {
@@ -247,11 +307,12 @@ int main() {
         }
 
         if (authChoice == 1) {
-            std::string uname, pass, role;
-            if (!readNoSpaceInput("Username: ", uname) || !readNoSpaceInput("Password: ", pass)) {
+            std::string uname, role;
+            if (!readNoSpaceInput("Username: ", uname)) {
                 std::cout << "Invalid input (spaces not allowed).\n";
                 continue;
             }
+            std::string pass = readMaskedPassword("Password: ");
 
             if (auth.loginUser(uname, pass, role)) {
                 std::cout << "\nLogin Successful! Role: " << role << "\n";
@@ -264,13 +325,18 @@ int main() {
                 std::cout << "Invalid Username or Password.\n";
             }
         } else if (authChoice == 2) {
-            std::string uname, pass;
+            std::string uname;
             if (!readNoSpaceInput("Enter New Username (no spaces): ", uname)) {
                 std::cout << "Registration Failed (Username cannot contain spaces).\n";
                 continue;
             }
-            if (!readNoSpaceInput("Enter New Password (no spaces): ", pass)) {
+            std::string pass = readMaskedPassword("Enter New Password (5-8 chars, no spaces): ");
+            if (pass.find(' ') != std::string::npos) {
                 std::cout << "Registration Failed (Password cannot contain spaces).\n";
+                continue;
+            }
+            if (pass.length() < 5 || pass.length() > 8) {
+                std::cout << "Registration Failed (Password must be between 5 and 8 characters).\n";
                 continue;
             }
 
@@ -280,13 +346,18 @@ int main() {
                 std::cout << "Registration Failed (Username already exists).\n";
             }
         } else if (authChoice == 3) {
-            std::string uname, pass, secretKey;
+            std::string uname, secretKey;
             if (!readNoSpaceInput("Enter New Editor Username (no spaces): ", uname)) {
                 std::cout << "Registration Failed (Username cannot contain spaces).\n";
                 continue;
             }
-            if (!readNoSpaceInput("Enter New Password (no spaces): ", pass)) {
+            std::string pass = readMaskedPassword("Enter New Password (5-8 chars, no spaces): ");
+            if (pass.find(' ') != std::string::npos) {
                 std::cout << "Registration Failed (Password cannot contain spaces).\n";
+                continue;
+            }
+            if (pass.length() < 5 || pass.length() > 8) {
+                std::cout << "Registration Failed (Password must be between 5 and 8 characters).\n";
                 continue;
             }
             if (!readNoSpaceInput("Enter Master Admin Secret Key: ", secretKey)) {
