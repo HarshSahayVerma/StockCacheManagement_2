@@ -37,20 +37,31 @@ TEST(AuthTest, 03_RegisterDuplicateUserFails) {
     std::remove("test_users.txt");
 }
 
-TEST(AuthTest, 04_RegisterInvalidPasswordLengthOrSpacesFails) {
+TEST(AuthTest, 04_RegisterInvalidUsernameLengthOrSpacesFails) {
     std::remove("test_users.txt");
     AuthManager auth("test_users.txt");
     EXPECT_FALSE(auth.registerUser("", "pass123", "USER"));
+    EXPECT_FALSE(auth.registerUser("abc", "pass123", "USER"));                 // < 4 chars
+    EXPECT_FALSE(auth.registerUser("sixteencharsuser", "pass123", "USER"));    // > 15 chars
+    EXPECT_FALSE(auth.registerUser("user name", "pass123", "USER"));           // space
+    EXPECT_TRUE(auth.registerUser("abcd", "pass123", "USER"));                 // exact 4 chars
+    EXPECT_TRUE(auth.registerUser("fifteencharsusr", "pass123", "USER"));      // exact 15 chars
+    std::remove("test_users.txt");
+}
+
+TEST(AuthTest, 05_RegisterInvalidPasswordLengthOrSpacesFails) {
+    std::remove("test_users.txt");
+    AuthManager auth("test_users.txt");
     EXPECT_FALSE(auth.registerUser("user1", "", "USER"));
     EXPECT_FALSE(auth.registerUser("user1", "1234", "USER"));       // < 5 chars
     EXPECT_FALSE(auth.registerUser("user1", "123456789", "USER"));  // > 8 chars
-    EXPECT_FALSE(auth.registerUser("user1", "pa ss1", "USER"));     // contains space
+    EXPECT_FALSE(auth.registerUser("user1", "pa ss1", "USER"));     // space
     EXPECT_TRUE(auth.registerUser("user1", "12345", "USER"));       // exact 5 chars
     EXPECT_TRUE(auth.registerUser("user2", "12345678", "USER"));    // exact 8 chars
     std::remove("test_users.txt");
 }
 
-TEST(AuthTest, 05_RegisterInvalidRoleFails) {
+TEST(AuthTest, 06_RegisterInvalidRoleFails) {
     std::remove("test_users.txt");
     AuthManager auth("test_users.txt");
     EXPECT_FALSE(auth.registerUser("user1", "pass123", "GUEST"));
@@ -58,17 +69,11 @@ TEST(AuthTest, 05_RegisterInvalidRoleFails) {
     std::remove("test_users.txt");
 }
 
-TEST(AuthTest, 06_RegisterAdminWithoutSecretKeyFails) {
+TEST(AuthTest, 07_RegisterAdminSecretKeyValidation) {
     std::remove("test_users.txt");
     AuthManager auth("test_users.txt");
     EXPECT_FALSE(auth.registerUser("admin1", "admin123", "ADMIN"));
     EXPECT_FALSE(auth.registerUser("admin1", "admin123", "ADMIN", "WRONG_KEY"));
-    std::remove("test_users.txt");
-}
-
-TEST(AuthTest, 07_RegisterAdminWithValidSecretKey) {
-    std::remove("test_users.txt");
-    AuthManager auth("test_users.txt");
     EXPECT_TRUE(auth.registerUser("admin1", "admin123", "ADMIN", "HCL@2026"));
     std::remove("test_users.txt");
 }
