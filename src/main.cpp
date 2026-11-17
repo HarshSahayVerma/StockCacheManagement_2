@@ -12,7 +12,6 @@
 #include <unistd.h>
 #endif
 
-// Reads a full line; immediately fails if user presses blank Enter or includes spaces
 static bool readLineNoSpace(const std::string& prompt, std::string& outStr) {
     std::cout << prompt;
     if (!std::getline(std::cin, outStr)) {
@@ -46,7 +45,6 @@ static bool readMenuChoice(int& outChoice) {
     return true;
 }
 
-// Cross-platform masked input showing '*' for passwords and secret keys
 static std::string readMaskedInput(const std::string& prompt) {
     std::cout << prompt;
     std::cout.flush();
@@ -180,7 +178,7 @@ static void runAdminMenu(StockCache& cache, AuthManager& auth, const std::string
                     std::cout << "\nSymbol       : " << result.symbol
                               << "\nPrice        : " << result.price
                               << "\nVolume       : " << result.volume
-                              << "\nTimestamp    : " << result.timestamp
+                              << "\nTimestamp    : " << StockCache::formatTimestamp(result.timestamp)
                               << "\nAccess Count : " << result.accessCount << "\n";
                 } else {
                     std::cout << "Stock Not Found.\n";
@@ -281,7 +279,7 @@ static void runUserMenu(StockCache& cache) {
                     std::cout << "\nSymbol       : " << result.symbol
                               << "\nPrice        : " << result.price
                               << "\nVolume       : " << result.volume
-                              << "\nTimestamp    : " << result.timestamp
+                              << "\nTimestamp    : " << StockCache::formatTimestamp(result.timestamp)
                               << "\nAccess Count : " << result.accessCount << "\n";
                 } else {
                     std::cout << "Stock Not Found.\n";

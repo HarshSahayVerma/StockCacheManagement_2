@@ -2,6 +2,19 @@
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+#include <cstdio>
+
+std::string StockCache::formatTimestamp(time_t rawTime) {
+    std::tm timeInfo{};
+#ifdef _WIN32
+    localtime_s(&timeInfo, &rawTime);
+#else
+    localtime_r(&rawTime, &timeInfo);
+#endif
+    char buffer[32];
+    std::strftime(buffer, sizeof(buffer), "%d/%m/%y %H:%M:%S", &timeInfo);
+    return std::string(buffer);
+}
 
 int StockCache::insertOrUpdate(const Stock& stock) {
     if (stock.symbol.empty() || stock.price < 0.0) {
@@ -64,7 +77,7 @@ void StockCache::displayAllStocks() const {
         const Stock& stk = pair.second;
         std::cout << stk.symbol << " | Price: " << std::fixed << std::setprecision(2) << stk.price
                   << " | Vol: " << stk.volume
-                  << " | Time: " << stk.timestamp
+                  << " | Time: " << formatTimestamp(stk.timestamp)
                   << " | Accesses: " << stk.accessCount << "\n";
     }
 }
@@ -91,7 +104,8 @@ void StockCache::displayStaleStocks(int maxAgeSeconds) const {
     for (const auto& pair : table) {
         if ((now - pair.second.timestamp) > maxAgeSeconds) {
             std::cout << pair.second.symbol << " | Price: " << std::fixed << std::setprecision(2)
-                      << pair.second.price << "\n";
+                      << pair.second.price
+                      << " | Time: " << formatTimestamp(pair.second.timestamp) << "\n";
             found = true;
         }
     }
