@@ -53,10 +53,10 @@ bool AuthManager::saveUsers() const {
 }
 
 bool AuthManager::registerUser(const std::string& uname, const std::string& pass, const std::string& role, const std::string& secretKey) {
-    if (uname.empty() || pass.length() < 5 || pass.length() > 8) {
+    if (uname.length() < 4 || uname.length() > 15 || uname.find(' ') != std::string::npos) {
         return false;
     }
-    if (pass.find(' ') != std::string::npos) {
+    if (pass.length() < 5 || pass.length() > 8 || pass.find(' ') != std::string::npos) {
         return false;
     }
     if (role != "ADMIN" && role != "USER") {
