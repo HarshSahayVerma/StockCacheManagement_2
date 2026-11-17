@@ -1,6 +1,7 @@
 #include <iostream>
 #include <limits>
 #include <string>
+#include <sstream>
 #include "Auth.h"
 #include "StockCache.h"
 
@@ -11,25 +12,45 @@
 #include <unistd.h>
 #endif
 
-static void clearInput() {
-    std::cin.clear();
-    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-}
-
-static bool readNoSpaceInput(const std::string& prompt, std::string& outStr) {
+// Reads a full line; immediately fails if user presses blank Enter or includes spaces
+static bool readLineNoSpace(const std::string& prompt, std::string& outStr) {
     std::cout << prompt;
-    std::getline(std::cin >> std::ws, outStr);
+    if (!std::getline(std::cin, outStr)) {
+        return false;
+    }
+    if (!outStr.empty() && outStr.back() == '\r') {
+        outStr.pop_back();
+    }
     if (outStr.empty() || outStr.find(' ') != std::string::npos) {
         return false;
     }
     return true;
 }
 
-// Cross-platform masked password input showing '*' for each typed character
-static std::string readMaskedPassword(const std::string& prompt) {
+static bool readMenuChoice(int& outChoice) {
+    std::string line;
+    if (!std::getline(std::cin, line)) {
+        return false;
+    }
+    if (!line.empty() && line.back() == '\r') {
+        line.pop_back();
+    }
+    if (line.empty()) {
+        return false;
+    }
+    std::stringstream ss(line);
+    char extra = '\0';
+    if (!(ss >> outChoice) || (ss >> extra)) {
+        return false;
+    }
+    return true;
+}
+
+// Cross-platform masked input showing '*' for passwords and secret keys
+static std::string readMaskedInput(const std::string& prompt) {
     std::cout << prompt;
     std::cout.flush();
-    std::string pass;
+    std::string secret;
 
 #ifdef _WIN32
     while (true) {
@@ -39,12 +60,12 @@ static std::string readMaskedPassword(const std::string& prompt) {
             break;
         }
         if (ch == '\b' || ch == 127) {
-            if (!pass.empty()) {
-                pass.pop_back();
+            if (!secret.empty()) {
+                secret.pop_back();
                 std::cout << "\b \b";
             }
         } else if (ch >= 32 && ch <= 126) {
-            pass.push_back(static_cast<char>(ch));
+            secret.push_back(static_cast<char>(ch));
             std::cout << '*';
         }
     }
@@ -62,20 +83,20 @@ static std::string readMaskedPassword(const std::string& prompt) {
             break;
         }
         if (ch == 127 || ch == '\b') {
-            if (!pass.empty()) {
-                pass.pop_back();
+            if (!secret.empty()) {
+                secret.pop_back();
                 std::cout << "\b \b";
                 std::cout.flush();
             }
         } else if (ch >= 32 && ch <= 126) {
-            pass.push_back(ch);
+            secret.push_back(ch);
             std::cout << '*';
             std::cout.flush();
         }
     }
     tcsetattr(STDIN_FILENO, TCSANOW, &oldt);
 #endif
-    return pass;
+    return secret;
 }
 
 static void runAdminMenu(StockCache& cache, AuthManager& auth, const std::string& currentAdmin) {
@@ -95,12 +116,10 @@ static void runAdminMenu(StockCache& cache, AuthManager& auth, const std::string
                   << "0. Logout\n"
                   << "Enter Choice: ";
 
-        if (!(std::cin >> choice)) {
-            clearInput();
+        if (!readMenuChoice(choice)) {
             std::cout << "Invalid input.\n";
             continue;
         }
-        clearInput();
 
         if (choice == 0) {
             std::cout << "Logging out...\n";
@@ -110,23 +129,33 @@ static void runAdminMenu(StockCache& cache, AuthManager& auth, const std::string
         switch (choice) {
             case 1: {
                 Stock stk;
-                if (!readNoSpaceInput("Enter Symbol: ", stk.symbol)) {
-                    std::cout << "Invalid Symbol (no spaces allowed).\n";
+                if (!readLineNoSpace("Enter Symbol: ", stk.symbol)) {
+                    std::cout << "Error: Stock symbol cannot be blank or contain spaces.\n";
                     break;
                 }
-                std::cout << "Enter Price: ";
-                if (!(std::cin >> stk.price) || stk.price < 0.0) {
-                    clearInput();
-                    std::cout << "Invalid price.\n";
+
+                std::string priceStr, volStr;
+                if (!readLineNoSpace("Enter Price: ", priceStr)) {
+                    std::cout << "Error: Price cannot be blank.\n";
                     break;
                 }
-                std::cout << "Enter Volume: ";
-                if (!(std::cin >> stk.volume)) {
-                    clearInput();
-                    std::cout << "Invalid volume.\n";
+                std::stringstream ssPrice(priceStr);
+                char extra = '\0';
+                if (!(ssPrice >> stk.price) || (ssPrice >> extra) || stk.price < 0.0) {
+                    std::cout << "Error: Invalid price.\n";
                     break;
                 }
-                clearInput();
+
+                if (!readLineNoSpace("Enter Volume: ", volStr)) {
+                    std::cout << "Error: Volume cannot be blank.\n";
+                    break;
+                }
+                std::stringstream ssVol(volStr);
+                if (!(ssVol >> stk.volume) || (ssVol >> extra)) {
+                    std::cout << "Error: Invalid volume.\n";
+                    break;
+                }
+
                 stk.timestamp = std::time(nullptr);
                 stk.accessCount = 0U;
 
@@ -143,8 +172,8 @@ static void runAdminMenu(StockCache& cache, AuthManager& auth, const std::string
             case 2: {
                 std::string sym;
                 Stock result;
-                if (!readNoSpaceInput("Enter Symbol: ", sym)) {
-                    std::cout << "Invalid Symbol.\n";
+                if (!readLineNoSpace("Enter Symbol: ", sym)) {
+                    std::cout << "Error: Symbol cannot be blank.\n";
                     break;
                 }
                 if (cache.lookupStock(sym, result) == 0) {
@@ -160,8 +189,8 @@ static void runAdminMenu(StockCache& cache, AuthManager& auth, const std::string
             }
             case 3: {
                 std::string sym;
-                if (!readNoSpaceInput("Enter Symbol: ", sym)) {
-                    std::cout << "Invalid Symbol.\n";
+                if (!readLineNoSpace("Enter Symbol: ", sym)) {
+                    std::cout << "Error: Symbol cannot be blank.\n";
                     break;
                 }
                 if (cache.deleteStock(sym) == 0) {
@@ -201,8 +230,8 @@ static void runAdminMenu(StockCache& cache, AuthManager& auth, const std::string
             }
             case 10: {
                 std::string targetUser;
-                if (!readNoSpaceInput("Enter Username to Remove: ", targetUser)) {
-                    std::cout << "Invalid Username.\n";
+                if (!readLineNoSpace("Enter Username to Remove: ", targetUser)) {
+                    std::cout << "Error: Username cannot be blank.\n";
                     break;
                 }
                 if (auth.removeUser(targetUser, currentAdmin)) {
@@ -230,12 +259,10 @@ static void runUserMenu(StockCache& cache) {
                   << "0. Logout\n"
                   << "Enter Choice: ";
 
-        if (!(std::cin >> choice)) {
-            clearInput();
+        if (!readMenuChoice(choice)) {
             std::cout << "Invalid input.\n";
             continue;
         }
-        clearInput();
 
         if (choice == 0) {
             std::cout << "Logging out...\n";
@@ -246,8 +273,8 @@ static void runUserMenu(StockCache& cache) {
             case 1: {
                 std::string sym;
                 Stock result;
-                if (!readNoSpaceInput("Enter Symbol: ", sym)) {
-                    std::cout << "Invalid Symbol.\n";
+                if (!readLineNoSpace("Enter Symbol: ", sym)) {
+                    std::cout << "Error: Symbol cannot be blank.\n";
                     break;
                 }
                 if (cache.lookupStock(sym, result) == 0) {
@@ -293,12 +320,10 @@ int main() {
                   << "0. Exit\n"
                   << "Enter Choice: ";
 
-        if (!(std::cin >> authChoice)) {
-            clearInput();
+        if (!readMenuChoice(authChoice)) {
             std::cout << "Invalid input.\n";
             continue;
         }
-        clearInput();
 
         if (authChoice == 0) {
             cache.saveToFile("data/stocks.txt");
@@ -308,11 +333,11 @@ int main() {
 
         if (authChoice == 1) {
             std::string uname, role;
-            if (!readNoSpaceInput("Username: ", uname)) {
-                std::cout << "Invalid input (spaces not allowed).\n";
+            if (!readLineNoSpace("Username: ", uname)) {
+                std::cout << "Error: Username cannot be blank or contain spaces.\n";
                 continue;
             }
-            std::string pass = readMaskedPassword("Password: ");
+            std::string pass = readMaskedInput("Password: ");
 
             if (auth.loginUser(uname, pass, role)) {
                 std::cout << "\nLogin Successful! Role: " << role << "\n";
@@ -326,11 +351,16 @@ int main() {
             }
         } else if (authChoice == 2) {
             std::string uname;
-            if (!readNoSpaceInput("Enter New Username (no spaces): ", uname)) {
-                std::cout << "Registration Failed (Username cannot contain spaces).\n";
+            if (!readLineNoSpace("Enter New Username (4-15 chars, no spaces): ", uname)) {
+                std::cout << "Registration Failed (Username cannot be blank or contain spaces).\n";
                 continue;
             }
-            std::string pass = readMaskedPassword("Enter New Password (5-8 chars, no spaces): ");
+            if (uname.length() < 4 || uname.length() > 15) {
+                std::cout << "Registration Failed (Username must be between 4 and 15 characters).\n";
+                continue;
+            }
+
+            std::string pass = readMaskedInput("Enter New Password (5-8 chars, no spaces): ");
             if (pass.find(' ') != std::string::npos) {
                 std::cout << "Registration Failed (Password cannot contain spaces).\n";
                 continue;
@@ -346,12 +376,17 @@ int main() {
                 std::cout << "Registration Failed (Username already exists).\n";
             }
         } else if (authChoice == 3) {
-            std::string uname, secretKey;
-            if (!readNoSpaceInput("Enter New Editor Username (no spaces): ", uname)) {
-                std::cout << "Registration Failed (Username cannot contain spaces).\n";
+            std::string uname;
+            if (!readLineNoSpace("Enter New Editor Username (4-15 chars, no spaces): ", uname)) {
+                std::cout << "Registration Failed (Username cannot be blank or contain spaces).\n";
                 continue;
             }
-            std::string pass = readMaskedPassword("Enter New Password (5-8 chars, no spaces): ");
+            if (uname.length() < 4 || uname.length() > 15) {
+                std::cout << "Registration Failed (Username must be between 4 and 15 characters).\n";
+                continue;
+            }
+
+            std::string pass = readMaskedInput("Enter New Password (5-8 chars, no spaces): ");
             if (pass.find(' ') != std::string::npos) {
                 std::cout << "Registration Failed (Password cannot contain spaces).\n";
                 continue;
@@ -360,7 +395,9 @@ int main() {
                 std::cout << "Registration Failed (Password must be between 5 and 8 characters).\n";
                 continue;
             }
-            if (!readNoSpaceInput("Enter Master Admin Secret Key: ", secretKey)) {
+
+            std::string secretKey = readMaskedInput("Enter Master Admin Secret Key: ");
+            if (secretKey.empty() || secretKey.find(' ') != std::string::npos) {
                 std::cout << "Registration Failed (Invalid Secret Key).\n";
                 continue;
             }
