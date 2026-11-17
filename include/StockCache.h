@@ -23,6 +23,8 @@ public:
     StockCache() = default;
     ~StockCache() = default;
 
+    static std::string formatTimestamp(time_t rawTime);
+
     int insertOrUpdate(const Stock& stock);
     int lookupStock(const std::string& symbol, Stock& result);
     int deleteStock(const std::string& symbol);
